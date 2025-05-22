@@ -8,18 +8,21 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 app.use(cors());
+app.use(cors({
+  origin: "http://localhost:3000", 
+}));
+
 app.use(bodyParser.json());
 app.use(express.json());
 
-// 🟢 Google Gemini Setup
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ✅ Test Route
+
 app.get("/", (req, res) => {
   res.send("Career AI Backend Running (Gemini + OpenRouter)");
 });
 
-// 🧠 Analyze questionnaire responses
 app.post("/api/analyze", (req, res) => {
   const answers = req.body.answers;
 
@@ -29,7 +32,7 @@ app.post("/api/analyze", (req, res) => {
     management: 0,
   };
 
-  answers.forEach((ans, index) => {
+  answers.forEach((ans) => {
     if (
       [
         "Strongly Agree",
@@ -86,7 +89,14 @@ app.post("/api/analyze", (req, res) => {
   res.json({ recommendation, score });
 });
 
-// 💬 OpenRouter Chatbot (fallback or choice)
+//  Fallback route if /api/chat is hit
+app.post("/api/chat", (req, res) => {
+  res.status(404).json({
+    error: "Please use /api/chat/gemini or /api/chat/openrouter",
+  });
+});
+
+//  OpenRouter Chatbot Route
 app.post("/api/chat/openrouter", async (req, res) => {
   const { messages } = req.body;
 
@@ -108,7 +118,7 @@ app.post("/api/chat/openrouter", async (req, res) => {
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "http://localhost:3000",
+          "HTTP-Referer": "http://localhost:3000", // Change if deployed
         },
       }
     );
@@ -116,12 +126,12 @@ app.post("/api/chat/openrouter", async (req, res) => {
     const reply = response.data.choices[0].message;
     res.json(reply);
   } catch (error) {
-    console.error("🔴 OpenRouter Error:", error.response?.data || error.message);
+    console.error(" OpenRouter Error:", error.response?.data || error.message);
     res.status(500).json({ error: "Error from OpenRouter API" });
   }
 });
 
-// 💬 Gemini Chatbot Route
+//  Gemini Chatbot Route
 app.post("/api/chat/gemini", async (req, res) => {
   const { messages } = req.body;
 
@@ -147,7 +157,9 @@ app.post("/api/chat/gemini", async (req, res) => {
       ],
     });
 
-    const reply = result.response.text();
+    const reply = result.response?.text?.();
+    if (!reply) throw new Error("No response from Gemini");
+
     res.json({ role: "assistant", content: reply });
   } catch (error) {
     console.error("🔴 Gemini Error:", error.message || error);
@@ -158,7 +170,7 @@ app.post("/api/chat/gemini", async (req, res) => {
   }
 });
 
-// 🟢 Start Server
+//  Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
